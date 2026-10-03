@@ -8,46 +8,81 @@
 // You will need to add private members to the class declaration in `byte_stream.hh`
 
 template <typename... Targs>
-void DUMMY_CODE(Targs &&... /* unused */) {}
+void DUMMY_CODE(Targs &&.../* unused */) {}
 
 using namespace std;
 
-ByteStream::ByteStream(const size_t capacity) { DUMMY_CODE(capacity); }
+ByteStream::ByteStream(const size_t capacity)
+    : _capacity(capacity)
+    , _head(0U)
+    , _tail(0U)
+    , _remaining_size(capacity)
+    , _total_read_bytes(0U)
+    , _total_write_bytes(0U)
+    , _buf(capacity, '\0')
+    , _eof(false) {}
 
 size_t ByteStream::write(const string &data) {
-    DUMMY_CODE(data);
-    return {};
+    if (_eof || !_capacity)
+        return 0U;
+    size_t written_bytes = data.size();
+    if (written_bytes > _remaining_size)
+        written_bytes = _remaining_size;
+    for (size_t pos = 0; pos < written_bytes; pos++, _tail++) {
+        _buf[_tail % _capacity] = data[pos];
+    }
+    _tail = _tail % _capacity;
+    _remaining_size -= written_bytes;
+    _total_write_bytes += written_bytes;
+    return written_bytes;
 }
 
 //! \param[in] len bytes will be copied from the output side of the buffer
 string ByteStream::peek_output(const size_t len) const {
-    DUMMY_CODE(len);
-    return {};
+    if (eof() || !_capacity)
+        return {};
+    size_t buf_size = _capacity - _remaining_size;
+    size_t output_size = min(buf_size, len);
+    std::string output{};
+    output.reserve(output_size);
+    for (size_t pos = 0; pos < output_size; pos++) {
+        output += _buf[(_head + pos) % _capacity];
+    }
+    return output;
 }
 
 //! \param[in] len bytes will be removed from the output side of the buffer
-void ByteStream::pop_output(const size_t len) { DUMMY_CODE(len); }
+void ByteStream::pop_output(const size_t len) {
+    if (eof() || !_capacity)
+        return;
+    size_t buf_size = _capacity - _remaining_size;
+    size_t output_size = min(buf_size, len);
+    _head = (_head + output_size) % _capacity;
+    _remaining_size += output_size;
+    _total_read_bytes += output_size;
+}
 
 //! Read (i.e., copy and then pop) the next "len" bytes of the stream
 //! \param[in] len bytes will be popped and returned
 //! \returns a string
 std::string ByteStream::read(const size_t len) {
-    DUMMY_CODE(len);
-    return {};
+    string output = peek_output(len);
+    pop_output(len);
+    return output;
 }
 
-void ByteStream::end_input() {}
+void ByteStream::end_input() { _eof = true; }
 
-bool ByteStream::input_ended() const { return {}; }
+bool ByteStream::input_ended() const { return _eof; }
 
-size_t ByteStream::buffer_size() const { return {}; }
+size_t ByteStream::buffer_size() const { return _capacity - _remaining_size; }
 
-bool ByteStream::buffer_empty() const { return {}; }
+bool ByteStream::buffer_empty() const { return !buffer_size(); }
 
-bool ByteStream::eof() const { return false; }
+bool ByteStream::eof() const { return _eof && buffer_empty(); }
 
-size_t ByteStream::bytes_written() const { return {}; }
+size_t ByteStream::bytes_written() const { return _total_write_bytes; }
 
-size_t ByteStream::bytes_read() const { return {}; }
+size_t ByteStream::bytes_read() const { return _total_read_bytes; }
 
-size_t ByteStream::remaining_capacity() const { return {}; }
+size_t ByteStream::remaining_capacity() const { return _remaining_size; }
